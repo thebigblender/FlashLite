@@ -11,27 +11,6 @@ A lightweight, high-occupancy CUDA fused attention kernel optimized for low-VRAM
 
 ---
 
-## Repository Structure
-
-```
-FlashLite/
-├── csrc/
-│   ├── includes/
-│   │   └── flash_attn.h          # WMMA tile sizes, fragments, and templates
-│   ├── flash_attn.cpp            # PyTorch C++ bindings
-│   ├── kernel_naive.cu           # Naive un-fused baseline attention kernel
-│   └── kernel_flash2.cu          # Custom FlashAttention-2 WMMA CUDA kernel
-├── tests/
-│   └── test_correctness.py       # Correctness verification vs PyTorch SDPA
-├── benchmarks/
-│   └── benchmark_throughput.py   # Latency & TFLOPS benchmark suite
-├── setup.py                      # Extension build configuration
-├── CMakeLists.txt                # CMake build configuration
-└── README.md
-```
-
----
-
 ## Prerequisites
 
 - **GPU**: NVIDIA Ampere with compute capability `sm_86` (e.g., RTX 30-series, A2000, A4000)
