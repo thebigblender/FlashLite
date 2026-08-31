@@ -4,9 +4,12 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
-#include <mma.h>
 #include <c10/cuda/CUDAStream.h>
 #include <c10/cuda/CUDAException.h>
+
+#ifdef __CUDACC__
+#include <mma.h>
+#endif
 
 // Error checking helper macro for CUDA runtime calls
 #define CUDA_CHECK(call)                                                      \
@@ -38,6 +41,7 @@ constexpr int BLOCK_M = 64;   // Query sequence tile size (Br)
 constexpr int BLOCK_N = 64;   // Key/Value sequence tile size (Bc)
 constexpr int DEFAULT_HEAD_DIM = 64; // Standard head dimension
 
+#ifdef __CUDACC__
 // ============================================================================
 // WMMA Typedefs & Fragment Abstractions
 // ============================================================================
@@ -75,6 +79,8 @@ struct Flash2SharedStorage {
     // Shared memory buffer for intermediate score tiles / warp communication
     float s_S[Br * Bc];
 };
+#endif
+
 
 // ============================================================================
 // Forward Function Declarations
