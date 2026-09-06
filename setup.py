@@ -5,8 +5,15 @@ import torch
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CUDA_HOME
 import torch.utils.cpp_extension
 
+import shutil
+
 # Bypass strict CUDA major version match check (e.g. system CUDA 13 vs PyTorch wheel 12)
 torch.utils.cpp_extension._check_cuda_version = lambda *args, **kwargs: None
+
+# Use clang/clang++ if available to avoid GCC 16 template-body errors with PyTorch C++ headers
+if shutil.which("clang++") and shutil.which("clang"):
+    os.environ.setdefault("CXX", "clang++")
+    os.environ.setdefault("CC", "clang")
 
 # Ensure CUDA is available
 
