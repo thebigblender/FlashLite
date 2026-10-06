@@ -1,4 +1,5 @@
 SUMMARY.md
+ignore.md
 .venv/
 build/
 *.so

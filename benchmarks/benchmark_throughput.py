@@ -3,6 +3,7 @@ import time
 from typing import Callable, Optional
 import torch
 import torch.nn.functional as F
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 # Try importing custom extension
 try:
@@ -76,7 +77,7 @@ def run_benchmarks(
 
     header = (
         f"{'SeqLen':>8} | "
-        f"{'PyTorch SDPA (ms)':>17} | {'SDPA TFLOPS':>12} | "
+        f"{'PyTorch FA2 (ms)':>17} | {'PT-FA2 TFLOPS':>13} | "
         f"{'Official FA2 (ms)':>17} | {'FA2 TFLOPS':>11} | "
         f"{'Naive CUDA (ms)':>15} | {'Naive TFLOPS':>12} | "
         f"{'Custom WMMA (ms)':>16} | {'WMMA TFLOPS':>12}"
@@ -94,10 +95,12 @@ def run_benchmarks(
         k = torch.randn(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16, device=device)
         v = torch.randn(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16, device=device)
 
-        # 1. PyTorch Native SDPA
-        sdpa_fn = lambda: F.scaled_dot_product_attention(
-            q, k, v, attn_mask=None, dropout_p=0.0, is_causal=is_causal, scale=sm_scale
-        )
+        # 1. PyTorch Native SDPA (Strict FlashAttention-2 Backend)
+        def sdpa_fn():
+            with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
+                return F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=None, dropout_p=0.0, is_causal=is_causal, scale=sm_scale
+                )
         sdpa_ms = measure_latency_ms(sdpa_fn)
         sdpa_tflops = (flops / (sdpa_ms * 1e-3)) / 1e12
 
@@ -153,10 +156,50 @@ def run_benchmarks(
     print("=" * 110)
     print("Notes:")
     print(" - TFLOPS = (FLOPs / (latency_ms * 1e-3)) / 1e12, where FLOPs = 4 * B * H * N^2 * D")
-    print(" - Custom extension measurements reflect dummy kernel overhead until kernel logic is implemented.")
+    print(" - Custom WMMA uses fused online softmax with Ampere sm_86 Tensor Core instructions.")
+
+    # ------------------------------------------------------------------------
+    # Memory Consumption Comparison (O(N^2) vs O(N))
+    # ------------------------------------------------------------------------
+    print("\n" + "=" * 85)
+    print(f" Peak Memory Allocation Benchmark (Intermediate Activation Overhead)")
+    print("=" * 85)
+    print(f"{'SeqLen':>8} | {'Un-fused PyTorch (MB)':>22} | {'FlashLite WMMA (MB)':>20} | {'Memory Reduction':>18}")
+    print("-" * 85)
+
+    def unfused_attn(q_in, k_in, v_in):
+        scores = torch.matmul(q_in, k_in.transpose(-2, -1)) * sm_scale
+        attn = torch.softmax(scores, dim=-1)
+        return torch.matmul(attn, v_in)
+
+    for seq_len in seq_lengths:
+        q = torch.randn(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16, device=device)
+        k = torch.randn(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16, device=device)
+        v = torch.randn(batch_size, num_heads, seq_len, head_dim, dtype=torch.float16, device=device)
+
+        # Baseline: Un-fused attention materializing [B, H, N, N]
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        _ = unfused_attn(q, k, v)
+        torch.cuda.synchronize()
+        mem_unfused = torch.cuda.max_memory_allocated() / (1024 ** 2)
+
+        # FlashLite WMMA (fused, O(N))
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        if HAS_CUSTOM_EXT:
+            _ = flash_attn_wmma.forward_flash2(q, k, v, sm_scale, is_causal)
+        torch.cuda.synchronize()
+        mem_flash = torch.cuda.max_memory_allocated() / (1024 ** 2)
+
+        ratio_str = f"{mem_unfused / mem_flash:.1f}x" if mem_flash > 0 else "N/A"
+        print(f"{seq_len:>8} | {mem_unfused:>20.2f} MB | {mem_flash:>18.2f} MB | {ratio_str:>18}")
+
+    print("=" * 85)
 
 
 if __name__ == "__main__":
+    # 1. Non-Causal Attention Benchmark
     run_benchmarks(
         batch_size=2,
         num_heads=8,
@@ -164,3 +207,13 @@ if __name__ == "__main__":
         seq_lengths=[512, 1024, 2048, 4096],
         is_causal=False
     )
+
+    # 2. Causal Attention Benchmark
+    run_benchmarks(
+        batch_size=2,
+        num_heads=8,
+        head_dim=64,
+        seq_lengths=[512, 1024, 2048, 4096],
+        is_causal=True
+    )
+
