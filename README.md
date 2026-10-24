@@ -143,13 +143,6 @@ python benchmarks/benchmark_throughput.py
 
 ---
 
-## Documentation & Architecture Deep Dive
-
-- **[BIGB.md](BIGB.md)**: Comprehensive architectural guide, low-level sm_86 lane coordinate proofs, roofline derivation, and multi-head dimension roadmap ($D \in \{32, 64, 128\}$).
-- **[UPDATES.md](UPDATES.md)**: Complete chronological optimization journal, stage-by-stage benchmark progression, and PTX instruction analysis.
-
----
-
 ## License
 
 MIT License.
