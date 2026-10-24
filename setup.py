@@ -41,6 +41,7 @@ nvcc_flags = [
     "-arch=sm_86",
     "--use_fast_math",
     "-std=c++17",
+    "-Xptxas=-v",
     "-U__CUDA_NO_HALF_OPERATORS__",
     "-U__CUDA_NO_HALF_CONVERSIONS__",
     "-U__CUDA_NO_HALF2_OPERATORS__",

@@ -21,6 +21,8 @@
         }                                                                     \
     } while (0)
 
+#include <optional>
+
 namespace flash_attn {
 
 // ============================================================================
@@ -116,8 +118,9 @@ torch::Tensor flash_attn_forward_flash2(
     torch::Tensor q,
     torch::Tensor k,
     torch::Tensor v,
-    double sm_scale,
-    bool is_causal
+    double sm_scale = 0.0,
+    bool is_causal = false,
+    std::optional<torch::Tensor> out = std::nullopt
 );
 
 } // namespace flash_attn

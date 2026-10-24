@@ -23,6 +23,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         py::arg("k"),
         py::arg("v"),
         py::arg("sm_scale") = 0.0,
-        py::arg("is_causal") = false
+        py::arg("is_causal") = false,
+        py::arg("out") = py::none()
     );
 }

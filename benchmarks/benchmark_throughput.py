@@ -126,7 +126,10 @@ def run_benchmarks(
         # 3. Custom Naive CUDA Attention
         if HAS_CUSTOM_EXT:
             naive_fn = lambda: flash_attn_wmma.forward_naive(q, k, v, sm_scale, is_causal)
-            naive_ms = measure_latency_ms(naive_fn)
+            # Scale down iterations for large seq_len to avoid GPU thermal throttling on mobile sm_86
+            n_warmup = 5 if seq_len <= 1024 else 2
+            n_runs   = 20 if seq_len <= 1024 else 5
+            naive_ms = measure_latency_ms(naive_fn, warmup=n_warmup, runs=n_runs)
             naive_tflops = (flops / (naive_ms * 1e-3)) / 1e12
             naive_ms_str = f"{naive_ms:15.3f}"
             naive_tflops_str = f"{naive_tflops:12.2f}"
@@ -136,7 +139,8 @@ def run_benchmarks(
 
         # 4. Custom WMMA FlashAttention-2
         if HAS_CUSTOM_EXT:
-            wmma_fn = lambda: flash_attn_wmma.forward_flash2(q, k, v, sm_scale, is_causal)
+            out_buf = torch.empty_like(q)
+            wmma_fn = lambda: flash_attn_wmma.forward_flash2(q, k, v, sm_scale, is_causal, out=out_buf)
             wmma_ms = measure_latency_ms(wmma_fn)
             wmma_tflops = (flops / (wmma_ms * 1e-3)) / 1e12
             wmma_ms_str = f"{wmma_ms:16.3f}"
